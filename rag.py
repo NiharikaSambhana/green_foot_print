@@ -11,7 +11,7 @@ from langchain_openai import (
 from config import (
     BASE_URL,
     EMBEDDING_MODEL,
-    VECTOR_DB,
+    VECTOR_DB
 )
 
 
@@ -41,12 +41,17 @@ ALLOWED_TOPICS = [
     "energy usage",
     "power consumption",
     "emissions",
+    "emission",
     "production log",
     "net zero",
     "token usage",
     "model efficiency",
     "environmental impact",
     "green prompt",
+    "ai",
+    "gpt",
+    "footprint",
+    "climate",
 ]
 
 
@@ -85,23 +90,17 @@ Please ask a sustainability-related query.
 SYSTEM_PROMPT = """
 You are GreenPrompt AI.
 
-You are a domain expert in:
-
-1. Carbon footprint estimation
-2. CO2e emissions
-3. Sustainable AI
-4. LLM energy optimization
-5. Production log sustainability
-6. Enterprise AI efficiency
+You are a sustainability and
+carbon footprint expert.
 
 STRICT RULES:
 
-- Reject unrelated questions.
-- ONLY answer sustainability topics.
-- Use retrieved context.
-- Never hallucinate.
-- Give enterprise-grade answers.
-- Suggest optimization strategies.
+- Only answer sustainability-related questions
+- Reject unrelated questions
+- Use retrieved context
+- Never hallucinate
+- Give enterprise-grade responses
+- Suggest optimization ideas
 
 If context is unavailable say:
 
@@ -110,17 +109,25 @@ If context is unavailable say:
 
 
 # -----------------------------------
-# EMBEDDING MODEL
-# SAME MODEL AS INGEST.PY
+# SAME EMBEDDING MODEL
+# AS INGEST.PY
 # -----------------------------------
 
-print("Loading embedding model...")
+print(
+    "Loading embedding model..."
+)
 
-embedding_model = OpenAIEmbeddings(
-    base_url=BASE_URL,
-    model=EMBEDDING_MODEL,
-    api_key="YOUR_API_KEY",
-    http_client=client
+embedding_model = (
+    OpenAIEmbeddings(
+
+        base_url=BASE_URL,
+
+        model=EMBEDDING_MODEL,
+
+        api_key="sk-k4NQXpytjb1jTyqHPnjcFQ",
+
+        http_client=client
+    )
 )
 
 
@@ -128,35 +135,49 @@ embedding_model = OpenAIEmbeddings(
 # LOAD CHROMADB
 # -----------------------------------
 
-print("Connecting to ChromaDB...")
+print(
+    "Connecting to ChromaDB..."
+)
 
 vectordb = Chroma(
+
     persist_directory=VECTOR_DB,
-    embedding_function=embedding_model
+
+    embedding_function=
+    embedding_model
 )
 
 
-retriever = vectordb.as_retriever(
-    search_kwargs={"k": 4}
+retriever = (
+    vectordb.as_retriever(
+        search_kwargs={"k": 4}
+    )
 )
 
 
 # -----------------------------------
-# RETRIEVAL FUNCTION
+# RAG RETRIEVAL
 # -----------------------------------
 
 def retrieve_context(query):
 
     try:
 
-        docs = retriever.invoke(query)
+        docs = (
+            retriever
+            .get_relevant_documents(
+                query
+            )
+        )
 
         if not docs:
+
             return (
                 "No relevant context found."
             )
 
         context = "\n\n".join(
+
             [
                 doc.page_content
                 for doc in docs
