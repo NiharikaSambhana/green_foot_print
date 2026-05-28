@@ -1,17 +1,19 @@
 import httpx
 
-from langchain_community.vectorstores import (
-    Chroma
+from langchain_openai import (
+    ChatOpenAI
 )
 
-from langchain_openai import (
-    OpenAIEmbeddings
+from rag import (
+    retrieve_context,
+    is_allowed_query,
+    rejection_message,
+    SYSTEM_PROMPT
 )
 
 from config import (
     BASE_URL,
-    EMBEDDING_MODEL,
-    VECTOR_DB,
+    CHAT_MODEL
 )
 
 
@@ -25,148 +27,129 @@ client = httpx.Client(
 
 
 # -----------------------------------
-# DOMAIN GUARDRAILS
+# LLM CONNECTION
 # -----------------------------------
 
-ALLOWED_TOPICS = [
+llm = ChatOpenAI(
 
-    "carbon",
-    "carbon footprint",
-    "co2",
-    "co2e",
-    "sustainability",
-    "green ai",
-    "llm",
-    "energy",
-    "energy usage",
-    "power consumption",
-    "emissions",
-    "production log",
-    "net zero",
-    "token usage",
-    "model efficiency",
-    "environmental impact",
-    "green prompt",
-]
-
-
-def is_allowed_query(query):
-
-    query = query.lower()
-
-    for topic in ALLOWED_TOPICS:
-
-        if topic in query:
-            return True
-
-    return False
-
-
-def rejection_message():
-
-    return """
-This chatbot only answers:
-
-• AI Carbon Footprint
-• Sustainability Analytics
-• CO2e Emissions
-• Green AI
-• LLM Energy Usage
-• Production Log Analysis
-
-Please ask a sustainability-related query.
-"""
-
-
-# -----------------------------------
-# SYSTEM PROMPT
-# -----------------------------------
-
-SYSTEM_PROMPT = """
-You are GreenPrompt AI.
-
-You are a domain expert in:
-
-1. Carbon footprint estimation
-2. CO2e emissions
-3. Sustainable AI
-4. LLM energy optimization
-5. Production log sustainability
-6. Enterprise AI efficiency
-
-STRICT RULES:
-
-- Reject unrelated questions.
-- ONLY answer sustainability topics.
-- Use retrieved context.
-- Never hallucinate.
-- Give enterprise-grade answers.
-- Suggest optimization strategies.
-
-If context is unavailable say:
-
-'Insufficient sustainability data available.'
-"""
-
-
-# -----------------------------------
-# EMBEDDING MODEL
-# SAME MODEL AS INGEST.PY
-# -----------------------------------
-
-print("Loading embedding model...")
-
-embedding_model = OpenAIEmbeddings(
     base_url=BASE_URL,
-    model=EMBEDDING_MODEL,
-    api_key="YOUR_API_KEY",
+
+    model=CHAT_MODEL,
+
+    api_key="sk-k4NQXpytjb1jTyqHPnjcFQ",
+
+    temperature=0.3,
+
     http_client=client
 )
 
 
 # -----------------------------------
-# LOAD CHROMADB
+# CHATBOT FUNCTION
 # -----------------------------------
 
-print("Connecting to ChromaDB...")
+def ask_greenprompt(query):
 
-vectordb = Chroma(
-    persist_directory=VECTOR_DB,
-    embedding_function=embedding_model
-)
+    # DOMAIN GUARDRAIL
 
+    if not is_allowed_query(query):
 
-retriever = vectordb.as_retriever(
-    search_kwargs={"k": 4}
-)
+        return rejection_message()
 
+    # RETRIEVE CONTEXT
 
-# -----------------------------------
-# RETRIEVAL FUNCTION
-# -----------------------------------
+    context = retrieve_context(
+        query
+    )
 
-def retrieve_context(query):
+    # FINAL PROMPT
+
+    final_prompt = f"""
+Retrieved Context:
+
+{context}
+
+User Question:
+
+{query}
+
+Generate a professional
+enterprise sustainability response.
+"""
 
     try:
 
-        docs = retriever.invoke(query)
+        response = llm.invoke(
 
-        if not docs:
-            return (
-                "No relevant context found."
-            )
-
-        context = "\n\n".join(
             [
-                doc.page_content
-                for doc in docs
+
+                (
+                    "system",
+                    SYSTEM_PROMPT
+                ),
+
+                (
+                    "human",
+                    final_prompt
+                )
+
             ]
         )
 
-        return context
+        return response.content
 
     except Exception as e:
 
         return (
-            f"Retrieval Error: {str(e)}"
+            f"LLM Error: {str(e)}"
         )
+
+
+# -----------------------------------
+# TERMINAL TEST
+# -----------------------------------
+
+def main():
+
+    print("\n")
+    print("=" * 50)
+    print(" GreenPrompt AI ")
+    print("=" * 50)
+
+    print(
+        "\nType 'exit' to stop\n"
+    )
+
+    while True:
+
+        query = input(
+            "Ask Question: "
+        )
+
+        if query.lower() == "exit":
+
+            print(
+                "\nGoodbye!"
+            )
+
+            break
+
+        response = (
+            ask_greenprompt(
+                query
+            )
+        )
+
+        print(
+            "\nBot Response:\n"
+        )
+
+        print(response)
+
+        print(
+            "\n" + "=" * 50
+        )
+
+
+if __name__ == "__main__":
+    main()
