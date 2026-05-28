@@ -7,9 +7,9 @@ greenprompt/
 ├── vector_db/
 │
 ├── backend/
-│   ├── ingest.py      ← Sandhiya
-│   ├── rag.py         ← You
-│   └── query.py       ← You
+│   ├── ingest.py    
+│   ├── rag.py         
+│   └── query.py      
 │
 └── .env
 
