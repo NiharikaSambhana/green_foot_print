@@ -1,132 +1,172 @@
-from dotenv import load_dotenv
-import os
+import httpx
 
-from openai import OpenAI
-
-from rag import (
-    retrieve_context,
-    is_allowed_query,
-    rejection_message,
-    SYSTEM_PROMPT
+from langchain_community.vectorstores import (
+    Chroma
 )
 
-load_dotenv()
-
-api_key = os.getenv(
-    "OPENAI_API_KEY"
+from langchain_openai import (
+    OpenAIEmbeddings
 )
 
-client = OpenAI(
-    api_key=api_key
+from config import (
+    BASE_URL,
+    EMBEDDING_MODEL,
+    VECTOR_DB,
 )
 
 
-def ask_greenprompt(query):
+# -----------------------------------
+# HTTP CLIENT
+# -----------------------------------
 
-    # -------------------------
-    # Guardrail Check
-    # -------------------------
+client = httpx.Client(
+    verify=False
+)
 
-    if not is_allowed_query(query):
 
-        return rejection_message()
+# -----------------------------------
+# DOMAIN GUARDRAILS
+# -----------------------------------
 
-    # -------------------------
-    # Retrieve Context
-    # -------------------------
+ALLOWED_TOPICS = [
 
-    context = retrieve_context(query)
+    "carbon",
+    "carbon footprint",
+    "co2",
+    "co2e",
+    "sustainability",
+    "green ai",
+    "llm",
+    "energy",
+    "energy usage",
+    "power consumption",
+    "emissions",
+    "production log",
+    "net zero",
+    "token usage",
+    "model efficiency",
+    "environmental impact",
+    "green prompt",
+]
 
-    # -------------------------
-    # Prompt Builder
-    # -------------------------
 
-    final_prompt = f"""
-Retrieved Context:
+def is_allowed_query(query):
 
-{context}
+    query = query.lower()
 
-User Question:
+    for topic in ALLOWED_TOPICS:
 
-{query}
+        if topic in query:
+            return True
 
-Generate an enterprise-grade answer.
+    return False
+
+
+def rejection_message():
+
+    return """
+This chatbot only answers:
+
+• AI Carbon Footprint
+• Sustainability Analytics
+• CO2e Emissions
+• Green AI
+• LLM Energy Usage
+• Production Log Analysis
+
+Please ask a sustainability-related query.
 """
+
+
+# -----------------------------------
+# SYSTEM PROMPT
+# -----------------------------------
+
+SYSTEM_PROMPT = """
+You are GreenPrompt AI.
+
+You are a domain expert in:
+
+1. Carbon footprint estimation
+2. CO2e emissions
+3. Sustainable AI
+4. LLM energy optimization
+5. Production log sustainability
+6. Enterprise AI efficiency
+
+STRICT RULES:
+
+- Reject unrelated questions.
+- ONLY answer sustainability topics.
+- Use retrieved context.
+- Never hallucinate.
+- Give enterprise-grade answers.
+- Suggest optimization strategies.
+
+If context is unavailable say:
+
+'Insufficient sustainability data available.'
+"""
+
+
+# -----------------------------------
+# EMBEDDING MODEL
+# SAME MODEL AS INGEST.PY
+# -----------------------------------
+
+print("Loading embedding model...")
+
+embedding_model = OpenAIEmbeddings(
+    base_url=BASE_URL,
+    model=EMBEDDING_MODEL,
+    api_key="YOUR_API_KEY",
+    http_client=client
+)
+
+
+# -----------------------------------
+# LOAD CHROMADB
+# -----------------------------------
+
+print("Connecting to ChromaDB...")
+
+vectordb = Chroma(
+    persist_directory=VECTOR_DB,
+    embedding_function=embedding_model
+)
+
+
+retriever = vectordb.as_retriever(
+    search_kwargs={"k": 4}
+)
+
+
+# -----------------------------------
+# RETRIEVAL FUNCTION
+# -----------------------------------
+
+def retrieve_context(query):
 
     try:
 
-        response = (
-            client.chat.completions.create(
-                model="gpt-4o-mini",
+        docs = retriever.invoke(query)
 
-                messages=[
-
-                    {
-                        "role": "system",
-                        "content":
-                        SYSTEM_PROMPT
-                    },
-
-                    {
-                        "role": "user",
-                        "content":
-                        final_prompt
-                    }
-
-                ],
-
-                temperature=0.3
+        if not docs:
+            return (
+                "No relevant context found."
             )
+
+        context = "\n\n".join(
+            [
+                doc.page_content
+                for doc in docs
+            ]
         )
 
-        answer = (
-            response
-            .choices[0]
-            .message.content
-        )
-
-        return answer
+        return context
 
     except Exception as e:
 
         return (
-            f"LLM Error: {str(e)}"
+            f"Retrieval Error: {str(e)}"
         )
-
-
-# --------------------------------
-# TERMINAL CHATBOT TEST
-# --------------------------------
-
-def main():
-
-    print("\n")
-    print("=" * 50)
-    print(" GreenPrompt AI Chatbot ")
-    print("=" * 50)
-
-    print(
-        "\nType 'exit' to quit.\n"
-    )
-
-    while True:
-
-        query = input(
-            "\nAsk Question: "
-        )
-
-        if query.lower() == "exit":
-
-            print("\nGoodbye!")
-            break
-
-        response = (
-            ask_greenprompt(query)
-        )
-
-        print("\nBot Response:\n")
-        print(response)
-
-
-if __name__ == "__main__":
-    main()
